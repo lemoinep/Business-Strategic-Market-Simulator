@@ -1,5 +1,11 @@
 # Business Strategic Market Simulator
 
+[![Version](https://img.shields.io/badge/version-1.0-green.svg)](https://github.com/lemoinep/Business-Strategic-Market-Simulator)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+
+---
+
 BusinessStrategicMarketSimulator is a research‑oriented playground for **business‑driven portfolio and market simulation**, combining:
 
 - a **single‑portfolio “business strategy” simulator** with Sun Tzu and chess‑inspired AI,  
