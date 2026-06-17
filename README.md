@@ -99,3 +99,16 @@ The multi‑agent simulator models a **small market of heterogeneous investors**
 
 ***
 
+---
+
+## 📝 **Author**
+
+**Dr. Patrick Lemoine**  
+*Engineer Expert in Scientific Computing*  
+[LinkedIn](https://www.linkedin.com/in/patrick-lemoine-7ba11b72/)
+
+---
+
+
+
+
