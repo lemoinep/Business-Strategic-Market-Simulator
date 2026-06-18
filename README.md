@@ -26,6 +26,11 @@ The project uses live or simulated market data to explore how strategic reasonin
 
 ## Strategic Framework: Sun Tzu and Chess-Inspired AI
 
+<p align="center">
+<img src="Images/P0002.jpg" width="100%" />
+</p>
+
+
 The central innovation of the simulator is the SunTzuChessMarketAI (housed in core_ai.py). This engine evaluates the market and dictates portfolio actions based on two primary strategic disciplines:
 
 1. Chess Strategy Integration
