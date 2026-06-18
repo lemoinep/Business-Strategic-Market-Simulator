@@ -6,7 +6,15 @@
 
 ---
 
-BusinessStrategicMarketSimulator is a research‑oriented playground for **business‑driven portfolio and market simulation**, combining:
+<p align="center">
+<img src="Images/P0001.jpg" width="100%" />
+</p>
+
+---
+
+The **Business-Strategic-Market-Simulator** is a research-oriented computational framework designed to explore investment decision-making through the lens of strategic reasoning. Developed by Patrick Lemoine, the project integrates traditional market dynamics with non-traditional heuristic models, specifically Sun Tzu’s Art of War and classical chess strategy.
+
+The system provides a modular architecture consisting of a single-portfolio strategy simulator, a multi-agent market environment, and a core engine optimized for Reinforcement Learning (RL) and High-Performance Computing (HPC). Key takeaways include:
 
 - a **single‑portfolio “business strategy” simulator** with Sun Tzu and chess‑inspired AI,  
 - a **multi‑agent market simulator** with heterogeneous investors and socio‑economic dynamics,  
@@ -15,6 +23,25 @@ BusinessStrategicMarketSimulator is a research‑oriented playground for **busin
 The project uses live or simulated market data to explore how strategic reasoning can influence investment decisions in a business context. This is a continuation of the work from my previous repo. [github](https://github.com/lemoinep/BusinessStrategySimulator)
 
 ***
+
+## Strategic Framework: Sun Tzu and Chess-Inspired AI
+
+The central innovation of the simulator is the SunTzuChessMarketAI (housed in core_ai.py). This engine evaluates the market and dictates portfolio actions based on two primary strategic disciplines:
+
+1. Chess Strategy Integration
+
+The AI treats the market universe as a strategic board where different stocks represent various levels of tactical importance.
+
+* Phases of Play: The AI categorizes the simulation into Opening, Middlegame, and Endgame phases, alongside a "Stability" phase.
+* Center Control: Success is evaluated by dominance over high-cap "central" assets such as AAPL, GOOG, and MSFT.
+* Prophylaxis: The AI employs preventative measures to guard against anticipated market shifts.
+
+2. Sun Tzu’s Art of War Principles
+
+The engine applies ancient military philosophy to financial management:
+
+* Avoidance of Unfavorable Battles: The system assesses market "tension" to decide when to engage or withdraw.
+* Flexibility and Posture: The AI alternates between Defense, Attack, and Stabilization patterns based on real-time market conditions.
 
 ## Features
 
