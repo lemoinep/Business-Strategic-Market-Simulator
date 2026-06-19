@@ -456,85 +456,90 @@ class MultiAgentPortfolio:
     
 class PortfolioEnv:
     """
-    Simple RL-style environment for the single-portfolio simulator.
-    API similar to Gym: reset() -> state, step(action) -> (state, reward, done, info).
+    RL-style environment for the single-portfolio simulator.
+    API:
+      reset() -> state_vector
+      step(action_alloc) -> (state_vector, reward, done, info)
     """
 
-    def __init__(self, max_turns: int = 50, tickers: Optional[List[str]] = None, cash: float = 10000):
+    def __init__(self, max_turns=50, tickers=None, cash=10000):
         self.max_turns = max_turns
-        self._tickers = tickers
-        self._cash = cash
+        self.tickers = tickers
+        self.cash = cash
         self.turn_index = 0
-        self.state_obj: Optional[PortfolioState] = None
+        self.state_obj = None
+        self.initial_value = None
 
-    def reset(self) -> List[float]:
-        """
-        Reset environment and return initial state vector.
-        """
-        if self._tickers:
-            self.state_obj = PortfolioState.from_tickers(self._tickers, cash=self._cash)
+    def reset(self):
+        if self.tickers:
+            self.state_obj = PortfolioState.from_tickers(self.tickers, cash=self.cash)
         else:
-            self.state_obj = PortfolioState.default(cash=self._cash)
+            self.state_obj = PortfolioState.default(cash=self.cash)
+
         self.turn_index = 0
-        return self._build_state_vector(initial=True)
+        self.initial_value = self.state_obj.total_value()
+        return self._get_state()
 
-    def step(self, action_alloc: List[float]):
-        """
-        Perform one simulation turn given an allocation action.
+    def step(self, action_alloc):
+        if self.state_obj is None:
+            raise RuntimeError("Call reset() before step().")
 
-        action_alloc: list of floats of length N == len(self.state_obj.assets),
-                      representing target weights, expected to sum ~1.
-        Returns: (state, reward, done, info_dict)
-        """
-        assert self.state_obj is not None, "Call reset() before step()."
+        n_assets = len(self.state_obj.assets)
+        if len(action_alloc) != n_assets:
+            raise ValueError(
+                f"Action length {len(action_alloc)} does not match number of assets {n_assets}"
+            )
 
-        # Normalize action if needed
-        n = len(self.state_obj.assets)
-        if len(action_alloc) != n:
-            raise ValueError(f"Action length {len(action_alloc)} != number of assets {n}")
         s = sum(action_alloc)
         if s <= 0:
-            action_alloc = [1.0 / n] * n
+            action_alloc = [1.0 / n_assets] * n_assets
         else:
-            action_alloc = [a / s for a in action_alloc]
+            action_alloc = [x / s for x in action_alloc]
 
         self.turn_index += 1
         prev_value = self.state_obj.total_value()
-        turn_result = simulate_single_turn(self.state_obj, action_alloc, self.turn_index)
+
+        turn_result = simulate_single_turn(
+            self.state_obj,
+            action_alloc,
+            self.turn_index,
+        )
+
         new_value = turn_result["portfolio_value"]
 
-        reward = new_value - prev_value
-
-        state_vec = self._build_state_vector_from_turn(turn_result)
+        reward = self._compute_reward(prev_value, new_value, turn_result)
         done = self.turn_index >= self.max_turns or new_value <= 0
 
-        info = turn_result 
+        state = self._get_state_from_turn(turn_result)
+        info = turn_result
 
-        return state_vec, reward, done, info
+        return state, reward, done, info
 
-    def _build_state_vector(self, initial: bool = False) -> List[float]:
+    def _get_state(self):
         """
-        Build a state vector from the current PortfolioState (no turn_result yet).
+        Construit l'état initial dans le même format que _get_state_from_turn.
         """
         tv = self.state_obj.total_value()
-        alloc = self.state_obj.asset_allocation()
-        fear = self.state_obj.market_cond["fear_index"]
-        liq = self.state_obj.market_cond["liquidity"]
-        vol = self.state_obj.market_cond["volatility"]
+        market = self.state_obj.market_cond
+        control_central = self.state_obj.market_ai.evaluate_center_control(self.state_obj.assets)
+        risk_tension = self.state_obj.market_ai.compute_risk_tension(
+            fear_index=market["fear_index"],
+            volatility=market["volatility"],
+            liquidity=market["liquidity"],
+            socio=self.state_obj.socio_state,
+        )
 
         return [
             self.state_obj.cash,
             tv,
-            fear,
-            liq,
-            vol,
-            *alloc,
+            market["fear_index"],
+            market["liquidity"],
+            market["volatility"],
+            control_central,
+            risk_tension,
         ]
 
-    def _build_state_vector_from_turn(self, tr: Dict) -> List[float]:
-        """
-        Build a state vector from a turn_result dict.
-        """
+    def _get_state_from_turn(self, tr):
         return [
             tr["cash"],
             tr["portfolio_value"],
@@ -543,4 +548,21 @@ class PortfolioEnv:
             tr["market_volatility"],
             tr["center_control"],
             tr["risk_tension"],
-        ] 
+        ]
+
+    def _compute_reward(self, prev_value, new_value, tr):
+        pnl = new_value - prev_value
+        turnover_penalty = 0.0
+
+        if "allocations_before" in tr and "allocations_after" in tr:
+            diff = 0.0
+            for a, b in zip(tr["allocations_before"], tr["allocations_after"]):
+                diff += abs(a - b)
+            turnover_penalty = 0.01 * diff * new_value
+
+        risk_penalty = 0.0
+        if tr.get("risk_tension") is not None:
+            risk_penalty = 0.05 * tr["risk_tension"] * new_value
+
+        reward = pnl - turnover_penalty - risk_penalty
+        return reward
