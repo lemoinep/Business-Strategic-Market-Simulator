@@ -26,14 +26,11 @@ class PortfolioSimulatorGUI:
         self.root = root
         self.root.title("Sun Tzu: The Art of Investment War in Real Time + Chess AI Logic")
 
-        # Portfolio state (core side)
         self.state = PortfolioState.default()
 
-        # Log area
         self.log_text = ScrolledText(root, state='disabled', width=110, height=20, wrap='word')
         self.log_text.pack(padx=10, pady=5)
 
-        # Control frame
         control_frame = tk.Frame(root)
         control_frame.pack(pady=5)
 
@@ -87,7 +84,6 @@ class PortfolioSimulatorGUI:
         try:
             raw = [float(x) for x in dist.strip().split('/')]
         except Exception:
-            # fallback: uniform distribution
             raw = [100.0 / n_assets] * n_assets
 
         # Adjust length
@@ -98,7 +94,6 @@ class PortfolioSimulatorGUI:
 
         total = sum(raw)
         if total <= 0:
-            # if all values are zero or negative, use uniform distribution
             return [1.0 / n_assets] * n_assets
 
         return [x / total for x in raw]
@@ -185,7 +180,6 @@ class PortfolioSimulatorGUI:
             messagebox.showwarning("No Data", "No data to export.")
             return
 
-        # Export via core
         filename = export_json(self.sim_data, prefix="portfolio_report")
         self.log(f"Report exported to: {filename}", event_type="event")
         messagebox.showinfo("Export Complete", f"Report saved as:\n{filename}")
@@ -196,8 +190,6 @@ class PortfolioSimulatorGUI:
         file = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json")])
         if file:
             try:
-                # Assume PortfolioState in business_sim exposes
-                # load_portfolio_from_file as before
                 self.state.load_portfolio_from_file(file)
                 self.log(f"Portfolio loaded from {file}", event_type="event")
             except Exception as e:

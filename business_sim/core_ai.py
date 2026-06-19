@@ -87,7 +87,7 @@ class SunTzuChessMarketAI:
 
 
     def evaluate_center_control(self, assets: List[AssetType]) -> float:
-        center_tickers = ["AAPL", "GOOG", "MSFT"]  # [page:1][page:2]
+        center_tickers = ["AAPL", "GOOG", "MSFT"]
         central_value = sum(a.value for a in assets if a.ticker in center_tickers)
         total = sum(a.value for a in assets)
         return central_value / total if total > 0 else 0.0

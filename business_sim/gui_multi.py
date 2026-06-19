@@ -51,6 +51,27 @@ class MultiAgentPortfolioSimulatorGUI:
             state="disabled",
         )
         self.export_button.grid(row=0, column=3, padx=5)
+        
+        tk.Label(control_frame, text="Number of Agents:").grid(row=1, column=0, padx=5)
+        self.n_agents_var = tk.IntVar(value=4)
+        self.n_agents_entry = tk.Entry(control_frame, width=5, textvariable=self.n_agents_var)
+        self.n_agents_entry.grid(row=1, column=1)
+        
+        tk.Label(control_frame, text="Base risk aversion:").grid(row=1, column=2, padx=5)
+        self.risk_base_var = tk.DoubleVar(value=0.5)
+        self.risk_base_scale = tk.Scale(
+            control_frame,
+            from_=0.0,
+            to=1.0,
+            resolution=0.05,
+            orient=tk.HORIZONTAL,
+            variable=self.risk_base_var,
+            length=150,
+        )
+        self.risk_base_scale.grid(row=1, column=3)
+        
+        
+        
 
     def log(self, message, event_type="info"):
         self.log_text.configure(state="normal")
@@ -66,25 +87,37 @@ class MultiAgentPortfolioSimulatorGUI:
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", tk.END)
         self.log_text.configure(state="disabled")
-
+    
         self.log(
             "=== Multi-Agent + Sun Tzu Chess + Socio-Economic Simulation Started ===",
             event_type="event",
         )
-
+    
         try:
             turns = int(self.turns_var.get())
             assert turns > 0
         except Exception:
             messagebox.showerror("Error", "Invalid number of turns.")
             return
-
-        self.state = MultiAgentPortfolio()
-
+    
+        try:
+            n_agents = int(self.n_agents_var.get())
+            assert n_agents > 0
+        except Exception:
+            messagebox.showerror("Error", "Invalid number of agents.")
+            return
+    
+        base_risk = float(self.risk_base_var.get())
+    
+        self.state = MultiAgentPortfolio(
+            n_agents=n_agents,
+            base_risk_aversion=base_risk,
+        )
+    
         for k in range(turns):
             turn_idx = k + 1
             turn_record = self.state.one_turn(turn_idx)
-
+    
             socio = turn_record["socio"]
             self.log(
                 f"Turn {turn_idx} - Socio: "
@@ -93,15 +126,15 @@ class MultiAgentPortfolioSimulatorGUI:
                 f"consumption_index={socio['consumption_index']:.2f}",
                 event_type="socio",
             )
-
+    
             for log_msg in turn_record["logs"]:
                 self.log(log_msg, event_type="agent")
-
+    
             self.log(
                 f"\nTotal market value: ${turn_record['total_market_value']:.2f}",
                 event_type="event",
             )
-
+    
         self.log("\n=== Simulation Completed ===", event_type="event")
         self.export_button.config(state="normal")
 

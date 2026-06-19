@@ -365,13 +365,14 @@ class MultiAgentInvestor:
 
 
 class MultiAgentPortfolio:
-    def __init__(self, n_agents: int = 4):
+    def __init__(self, n_agents: int = 4, base_risk_aversion: float = 0.5):
         self.socio_state = SocioEconomicState()
         self.market_cond = {
             "fear_index": random.uniform(0.1, 0.9),
             "liquidity": random.uniform(0.5, 1.0),
             "volatility": random.uniform(0.14, 0.4),
         }
+        self.base_risk_aversion = base_risk_aversion
         self.agents: List[MultiAgentInvestor] = []
 
         for i in range(n_agents):
@@ -451,3 +452,95 @@ class MultiAgentPortfolio:
             for asset in agent.assets.values():
                 value += asset.value
         return value
+    
+    
+class PortfolioEnv:
+    """
+    Simple RL-style environment for the single-portfolio simulator.
+    API similar to Gym: reset() -> state, step(action) -> (state, reward, done, info).
+    """
+
+    def __init__(self, max_turns: int = 50, tickers: Optional[List[str]] = None, cash: float = 10000):
+        self.max_turns = max_turns
+        self._tickers = tickers
+        self._cash = cash
+        self.turn_index = 0
+        self.state_obj: Optional[PortfolioState] = None
+
+    def reset(self) -> List[float]:
+        """
+        Reset environment and return initial state vector.
+        """
+        if self._tickers:
+            self.state_obj = PortfolioState.from_tickers(self._tickers, cash=self._cash)
+        else:
+            self.state_obj = PortfolioState.default(cash=self._cash)
+        self.turn_index = 0
+        return self._build_state_vector(initial=True)
+
+    def step(self, action_alloc: List[float]):
+        """
+        Perform one simulation turn given an allocation action.
+
+        action_alloc: list of floats of length N == len(self.state_obj.assets),
+                      representing target weights, expected to sum ~1.
+        Returns: (state, reward, done, info_dict)
+        """
+        assert self.state_obj is not None, "Call reset() before step()."
+
+        # Normalize action if needed
+        n = len(self.state_obj.assets)
+        if len(action_alloc) != n:
+            raise ValueError(f"Action length {len(action_alloc)} != number of assets {n}")
+        s = sum(action_alloc)
+        if s <= 0:
+            action_alloc = [1.0 / n] * n
+        else:
+            action_alloc = [a / s for a in action_alloc]
+
+        self.turn_index += 1
+        prev_value = self.state_obj.total_value()
+        turn_result = simulate_single_turn(self.state_obj, action_alloc, self.turn_index)
+        new_value = turn_result["portfolio_value"]
+
+        reward = new_value - prev_value
+
+        state_vec = self._build_state_vector_from_turn(turn_result)
+        done = self.turn_index >= self.max_turns or new_value <= 0
+
+        info = turn_result 
+
+        return state_vec, reward, done, info
+
+    def _build_state_vector(self, initial: bool = False) -> List[float]:
+        """
+        Build a state vector from the current PortfolioState (no turn_result yet).
+        """
+        tv = self.state_obj.total_value()
+        alloc = self.state_obj.asset_allocation()
+        fear = self.state_obj.market_cond["fear_index"]
+        liq = self.state_obj.market_cond["liquidity"]
+        vol = self.state_obj.market_cond["volatility"]
+
+        return [
+            self.state_obj.cash,
+            tv,
+            fear,
+            liq,
+            vol,
+            *alloc,
+        ]
+
+    def _build_state_vector_from_turn(self, tr: Dict) -> List[float]:
+        """
+        Build a state vector from a turn_result dict.
+        """
+        return [
+            tr["cash"],
+            tr["portfolio_value"],
+            tr["market_fear"],
+            tr["market_liquidity"],
+            tr["market_volatility"],
+            tr["center_control"],
+            tr["risk_tension"],
+        ] 
