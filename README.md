@@ -48,6 +48,50 @@ The engine applies ancient military philosophy to financial management:
 * Avoidance of Unfavorable Battles: The system assesses market "tension" to decide when to engage or withdraw.
 * Flexibility and Posture: The AI alternates between Defense, Attack, and Stabilization patterns based on real-time market conditions.
 
+
+## Mathematical Formulation
+
+### 1. Strategic AI Modeling (Sun Tzu & Chess)
+
+The state of the AI strategy, denoted as $S_{AI}$, is defined as a function of market tension and "center control".
+
+**Strategic Tension ($T$):**
+It evolves over time ($t$) based on market conditions—fear $f$, volatility $v$, liquidity $l$—and socio-economic variables.
+$$T_t = \phi(f_t, v_t, l_t, U_t, I_t, CI_t)$$
+*Where $U$ is unemployment, $I$ is inflation, and $CI$ is the consumption index.*
+
+**Center Control ($C$):**
+Inspired by chess strategy, this represents dominance over pivot assets such as AAPL, MSFT, or GOOG.
+$$C_t = \sum_{i \in \text{pivot assets}} w_i \cdot \text{Position}_i(t)$$
+*Where $w_i$ is the strategic weight of asset $i$.*
+
+**Strategic Decision ($D$):**
+The AI selects a phase $P$ (Opening, Middlegame, Endgame, or Stability) and a posture (Attack, Defense, or Stabilization).
+$$D_t = f(T_t, C_t) \rightarrow P \in \{O, M, E, S\}$$
+
+### 2. Multi-Agent Market Dynamics
+
+In your multi-agent simulator, each investor $j$ makes decisions based on their risk profile and the broader macro-environment.
+
+**Socio-Economic State ($M$):**
+This state evolves stochastically at each turn:
+$$M_{t+1} = M_t + \epsilon_t \quad \text{where } M = \{U, I, CI\}$$
+
+**Agent Decision Function ($A_j$):**
+Each agent $j$ has a specific risk aversion $\alpha_j$. Their action (Buy, Sell, or Hold) is determined by AI logic:
+$$\text{Action}_{j,t} = \text{AI}_{logic}(T_t, C_t, \alpha_j)$$
+This logic applies **Art of War** principles, such as avoiding unfavorable battles and maintaining flexibility.
+
+### 3. Portfolio Management and Rebalancing
+
+The total portfolio value ($V$) at time $t$ is the sum of cash ($K$) and the value of all held assets ($A$):
+$$V_t = K_t + \sum_{i=1}^{n} (\text{Price}_{i,t} \times \text{Quantity}_{i,t})$$
+
+**Rebalancing:**
+The simulator adjusts positions toward a target allocation $W^*$, which is modified by the AI's recommendations:
+$$W^*_{AI} = W^*_{initial} + \Delta D_t$$
+This adjustment occurs during the `simulate_single_turn` function to minimize the gap between the current state and the strategic target.
+
 ## Features
 
 - **Single‑portfolio simulator (GUI)**  
