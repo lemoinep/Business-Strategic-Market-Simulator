@@ -71,7 +71,7 @@ $$
 C_t = \sum_{i \in \text{pivot assets}} w_i \cdot \text{Position}_i(t)
 $$
 
-*Where $w_i$ is the strategic weight of asset $i$.*
+Where $w_i$ is the strategic weight of asset $i$.
 
 **Strategic Decision ($D$)**  
 The AI selects a phase $P$ (Opening, Middlegame, Endgame, or Stability) and a posture (Attack, Defense, or Stabilization):
