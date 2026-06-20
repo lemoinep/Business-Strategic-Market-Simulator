@@ -116,7 +116,7 @@ $$
 The simulator adjusts positions toward a target allocation $W^*$, which is modified by the AI's recommendations:
 
 $$
-W^{*}_{AI} = W^{*}_{initial} + \Delta D_t
+W^{*}_{AI} = W^{*}_{\text{initial}} + \Delta D_t
 $$
 
 This adjustment occurs during the `simulate_single_turn` function to minimize the gap between the current state and the strategic target.
