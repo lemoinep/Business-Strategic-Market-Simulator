@@ -1,5 +1,3 @@
-# RL trajectory generation using the trained PPO policy
-
 import csv
 from typing import List
 

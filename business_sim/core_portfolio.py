@@ -181,7 +181,8 @@ def simulate_single_turn(
 
     total_value = state.total_value()
     for i, asset in enumerate(state.assets):
-        target_value = total_value * alloc_percent[i]
+        #target_value = total_value * alloc_percent[i]
+        target_value = total_value * alloc_used[i]
         price = asset.price
         qty_target = target_value / price if price > 0 else 0
         diff_qty = int(qty_target - asset.quantity)
@@ -236,6 +237,8 @@ def simulate_single_turn(
         "risk_tension": risk_tension,
         "tactics": all_recs,
         "beat_market": beat_market,
+        "market_index_start": market_index_start,
+        "market_index_end": market_index_end,
     }
     if state.socio_state is not None:
         turn_result["socio"] = {

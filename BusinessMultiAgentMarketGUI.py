@@ -1,4 +1,5 @@
-# BusinessMultiAgentMarketGUI.py
+# BusinessMultiAgentMarketGUI
+# Author(s): Dr. Patrick Lemoine
 # Wrapper to launch the multi-agent GUI based on business_sim.gui_multi
 
 import tkinter as tk
