@@ -207,7 +207,14 @@ The multi‑agent simulator models a **small market of heterogeneous investors**
 
 ## Sun Tzu Strategic Portfolio Dashboard (Dash App)
 
-This program provides an interactive web dashboard to monitor and simulate an investment portfolio using the Sun Tzu + chess-inspired AI engine developed in this project. It loads a configurable portfolio (see `dash_app/portfolio_config.yaml`), fetches historical market data from Yahoo Finance, and displays live charts of individual tickers and overall portfolio value versus a benchmark. On top of this, the dashboard exposes the core AI logic from `business_sim` in two ways: (1) a “Live & AI Snapshot” view that analyzes the current portfolio state and reports the strategic phase, risk tension, center control and recommended tactics; and (2) an “AI Simulation (N turns)” view that runs multi-turn simulations, plots the simulated portfolio trajectory (with an optional simulated market index), and reports basic performance metrics such as number of turns beating the market and maximum drawdown. A reinforcement learning (PPO) mode is also planned/available to compare Sun Tzu strategies with a trained RL agent on the same environment.
+This program provides an interactive web dashboard to monitor and simulate an investment portfolio using the Sun Tzu + chess-inspired AI engine developed in this project. It loads a configurable portfolio (see `dash_app/portfolio_config.yaml`), fetches historical market data from Yahoo Finance, and displays live charts of individual tickers and overall portfolio value versus a benchmark. 
+
+<p align="center">
+<img src="Images/P0003.jpg" width="100%" />
+</p>
+
+
+On top of this, the dashboard exposes the core AI logic from `business_sim` in two ways: (1) a “Live & AI Snapshot” view that analyzes the current portfolio state and reports the strategic phase, risk tension, center control and recommended tactics; and (2) an “AI Simulation (N turns)” view that runs multi-turn simulations, plots the simulated portfolio trajectory (with an optional simulated market index), and reports basic performance metrics such as number of turns beating the market and maximum drawdown. A reinforcement learning (PPO) mode is also planned/available to compare Sun Tzu strategies with a trained RL agent on the same environment.
 
 ---
 
