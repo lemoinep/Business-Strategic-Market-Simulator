@@ -17,9 +17,16 @@ import pandas as pd
 import yfinance as yf
 
 import dash
+import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
+
+
+import plotly.io as pio
+pio.templates.default = "plotly_dark"  
+
+
 
 from business_sim.dash_api import (
     init_portfolio_state_from_config,
@@ -123,9 +130,42 @@ alloc_vector = compute_allocation_vector(PORTFOLIO_CONFIG, portfolio_state)
 
 
 # ---------- Dash app ----------
-
-app = dash.Dash(__name__, suppress_callback_exceptions=True)
+app = dash.Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.CYBORG],
+    suppress_callback_exceptions=True,
+)
 app.title = "Sun Tzu Strategic Portfolio Dashboard"
+
+
+"""
+app.layout = dbc.Container(
+    [
+        dbc.NavbarSimple(
+            brand="Sun Tzu Strategic Portfolio Dashboard",
+            color="primary",
+            dark=True,
+            className="mb-3",
+        ),
+
+        dcc.Store(id="prices-store", data=prices_df.to_dict("records")),
+
+        dbc.Tabs(
+            id="tabs",
+            active_tab="tab-live",
+            className="mb-3",
+            children=[
+                dbc.Tab(label="Live & AI Snapshot", tab_id="tab-live"),
+                dbc.Tab(label="AI Simulation (N turns)", tab_id="tab-sim"),
+            ],
+        ),
+
+        html.Div(id="tabs-content"),
+    ],
+    fluid=True,
+)
+"""
+
 
 app.layout = html.Div([
     html.H1("Sun Tzu: Strategic Portfolio Dashboard"),
@@ -144,7 +184,7 @@ app.layout = html.Div([
     html.Div(id="tabs-content"),
 ])
 
-
+"""
 def layout_live_tab():
     return html.Div([
         html.Div([
@@ -186,8 +226,72 @@ def layout_live_tab():
             }),
         ]),
     ])
+"""
 
+def layout_live_tab():
+    return dbc.Row(
+        [
+            dbc.Col(
+                dbc.Card(
+                    [
+                        dbc.CardHeader("Market & Portfolio"),
+                        dbc.CardBody(
+                            [
+                                html.Label("Ticker", className="text-light"),
+                                dcc.Dropdown(
+                                    id="ticker-dropdown",
+                                    options=[{"label": t, "value": t} for t in TICKERS],
+                                    value=TICKERS[0] if TICKERS else None,
+                                    clearable=False,
+                                ),
+                                dcc.Graph(id="price-chart", style={"height": "300px"}),
+                                dcc.Graph(id="portfolio-chart", style={"height": "300px"}),
+                            ]
+                        ),
+                    ],
+                    className="mb-3",
+                ),
+                width=8,
+            ),
+            dbc.Col(
+                dbc.Card(
+                    [
+                        dbc.CardHeader("Sun Tzu / Chess AI"),
+                        dbc.CardBody(
+                            [
+                                dbc.Button(
+                                    "Analyze (1 turn)",
+                                    id="ai-run-button",
+                                    color="success",
+                                    className="mb-2",
+                                ),
+                                html.Div(id="ai-last-run", className="mb-2"),
 
+                                html.Div(id="ai-phase"),
+                                html.Div(id="ai-tension"),
+                                html.Div(id="ai-center-control"),
+                                html.Div(id="ai-personality"),
+                                html.Div(id="ai-posture"),
+
+                                html.H5("Tactics", className="mt-3"),
+                                html.Ul(id="ai-tactics"),
+
+                                html.H5("AI Explanation", className="mt-3"),
+                                html.Pre(
+                                    id="ai-explanation",
+                                    style={"whiteSpace": "pre-wrap"},
+                                ),
+                            ]
+                        ),
+                    ],
+                    className="mb-3",
+                ),
+                width=4,
+            ),
+        ]
+    )
+
+"""
 def layout_sim_tab():
     return html.Div([
         html.H3("AI Simulation (N turns)"),
@@ -227,8 +331,101 @@ def layout_sim_tab():
         dcc.Graph(id="sim-portfolio-chart"),
         dcc.Graph(id="sim-tension-chart"),
     ])
+"""
+
+def layout_sim_tab():
+    return dbc.Row(
+        [
+            dbc.Col(
+                dbc.Card(
+                    [
+                        dbc.CardHeader("Simulation Controls"),
+                        dbc.CardBody(
+                            [
+                                html.Label("Number of turns", className="text-light"),
+                                dcc.Slider(
+                                    id="sim-horizon-slider",
+                                    min=5,
+                                    max=60,
+                                    step=5,
+                                    value=20,
+                                    marks={i: str(i) for i in range(5, 65, 10)},
+                                ),
+
+                                html.Br(),
+                                html.Label("Simulation mode", className="text-light"),
+                                dcc.RadioItems(
+                                    id="sim-mode-radio",
+                                    options=[
+                                        {
+                                            "label": "Sun Tzu / Chess AI",
+                                            "value": "suntzu",
+                                        },
+                                        {"label": "RL (PPO)", "value": "rl"},
+                                    ],
+                                    value="suntzu",
+                                    labelStyle={
+                                        "display": "inline-block",
+                                        "marginRight": "10px",
+                                        "color": "#ffffff", 
+                                    },
+                                    style={"color": "#ffffff"},
+                                ),
+
+                                html.Br(),
+                                dbc.Button(
+                                    "Run Simulation",
+                                    id="sim-run-button",
+                                    color="info",
+                                    className="mt-2",
+                                ),
+                                # html.Div(id="sim-last-run", className="mt-2"),
+                                html.Div(id="sim-last-run", className="mt-2", style={"color": "#ffffff"}),
+                            ]
+                        ),
+                    ],
+                    className="mb-3",
+                ),
+                width=4,
+            ),
+            dbc.Col(
+                dbc.Card(
+                    [
+                        dbc.CardHeader("Portfolio & Benchmark"),
+                        dbc.CardBody(
+                            [
+                                dcc.Graph(id="sim-portfolio-chart", style={"height": "300px"}),
+                            ]
+                        ),
+                    ],
+                    className="mb-3",
+                ),
+                width=8,
+            ),
+            dbc.Col(
+                dbc.Card(
+                    [
+                        dbc.CardHeader("Strategic Tension / RL Reward"),
+                        dbc.CardBody(
+                            [
+                                dcc.Graph(id="sim-tension-chart", style={"height": "300px"}),
+                                html.H5("Simulation summary", className="mt-3"),
+                                html.Pre(
+                                    id="sim-explanation",
+                                    style={"whiteSpace": "pre-wrap"},
+                                ),
+                            ]
+                        ),
+                    ],
+                    className="mb-3",
+                ),
+                width=12,
+            ),
+        ]
+    )
 
 
+"""
 @app.callback(
     Output("tabs-content", "children"),
     Input("tabs", "value"),
@@ -237,6 +434,16 @@ def render_tabs(tab_value):
     if tab_value == "tab-sim":
         return layout_sim_tab()
     # default: live view
+    return layout_live_tab()
+"""
+
+@app.callback(
+    Output("tabs-content", "children"),
+    Input("tabs", "value"),
+)
+def render_tabs(tab_value):
+    if tab_value == "tab-sim":
+        return layout_sim_tab()
     return layout_live_tab()
 
 
