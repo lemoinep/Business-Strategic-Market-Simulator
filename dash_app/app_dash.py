@@ -28,7 +28,9 @@ from business_sim.dash_api import (
     run_single_ai_turn,
     get_ai_snapshot, 
     run_ai_simulation,
-    run_rl_simulation
+    run_rl_simulation,
+    explain_snapshot_result,
+    explain_simulation_results,
 )
 
 
@@ -173,6 +175,9 @@ def layout_live_tab():
 
                 html.H4("Tactics"),
                 html.Ul(id="ai-tactics"),
+                
+                html.H4("AI Explanation"),
+                html.Pre(id="ai-explanation", style={"whiteSpace": "pre-wrap"}),
             ], style={
                 "width": "30%",
                 "display": "inline-block",
@@ -213,6 +218,10 @@ def layout_sim_tab():
             html.Br(),
             html.Button("Run Simulation", id="sim-run-button", n_clicks=0),
             html.Div(id="sim-last-run"),
+            
+            html.H4("Simulation summary"),
+            html.Pre(id="sim-explanation", style={"whiteSpace": "pre-wrap"}),
+
         ], style={"marginBottom": "20px"}),
 
         dcc.Graph(id="sim-portfolio-chart"),
@@ -236,6 +245,7 @@ def render_tabs(tab_value):
         Output("sim-portfolio-chart", "figure"),
         Output("sim-tension-chart", "figure"),
         Output("sim-last-run", "children"),
+        Output("sim-explanation", "children"), 
     ],
     Input("sim-run-button", "n_clicks"),
     State("sim-horizon-slider", "value"),
@@ -360,8 +370,14 @@ def run_simulation(n_clicks, n_turns, mode, prices_data):
         f"steps beating market={n_beat}, "
         f"max drawdown={mdd * 100:.2f}%"
     )
+    
+    if mode == "suntzu":
+        explanation = explain_simulation_results(sim_df)
+    else:
+        explanation = "RL (PPO) simulation: summary explanation not implemented yet."
 
-    return fig_port, fig_tension, last_msg
+
+    return fig_port, fig_tension, last_msg, explanation
 
 
 # ---------- Callbacks ----------
@@ -452,6 +468,7 @@ def update_portfolio_chart(_ticker, prices_data):
         Output("ai-personality", "children"),
         Output("ai-posture", "children"),
         Output("ai-tactics", "children"),
+        Output("ai-explanation", "children"),
     ],
     Input("ai-run-button", "n_clicks"),
     State("prices-store", "data"),
@@ -536,6 +553,8 @@ def run_ai_turn(n_clicks, prices_data):
         posture = "Stabilization"
 
     tactics_li = [html.Li(str(t)) for t in tactics]
+    
+    explanation = explain_snapshot_result(result)
 
     return (
         f"Last analysis: turn {turn} - value={portfolio_value:.2f}, cash={result_cash:.2f}",
@@ -545,6 +564,7 @@ def run_ai_turn(n_clicks, prices_data):
         f"AI personality: {personality}",
         f"Suggested posture: {posture}",
         tactics_li,
+        explanation,
     )
 
 def open_browser():

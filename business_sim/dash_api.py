@@ -34,6 +34,118 @@ def init_portfolio_state_from_config(config: Dict[str, Any]) -> PortfolioState:
     return state
 
 
+def explain_snapshot_result(result: Dict[str, Any]) -> str:
+    """
+    Generate a human-readable explanation for a single Sun Tzu / Chess AI snapshot.
+
+    `result` is the dict returned by simulate_single_turn:
+      - turn, portfolio_value, cash
+      - ai_personality, ai_phase, risk_tension, center_control
+      - tactics (list of strings)
+      - beat_market (bool)
+      - socio (optional)
+    """
+    turn = result.get("turn", 1)
+    value = result.get("portfolio_value", 0.0)
+    cash = result.get("cash", 0.0)
+    phase = result.get("ai_phase", "unknown")
+    personality = result.get("ai_personality", "unknown")
+    tension = float(result.get("risk_tension", 0.0))
+    center_control = float(result.get("center_control", 0.0))
+    beat_market = bool(result.get("beat_market", False))
+    tactics = result.get("tactics", [])
+
+    lines = []
+
+    # Overview
+    lines.append(
+        f"Turn {turn}: the portfolio is valued at {value:.2f} with {cash:.2f} in cash."
+    )
+
+    # Phase & personality
+    lines.append(
+        f"The AI identifies the current strategic phase as '{phase}' "
+        f"with a '{personality}' personality."
+    )
+
+    # Risk tension & center control
+    lines.append(
+        f"Risk tension is {tension:.3f}, indicating a "
+        + ("low-stress environment" if tension < 0.3 else "high-stress environment" if tension > 0.7 else "moderate tension")
+        + f", and center control is {center_control:.3f}, "
+        + ("strong control of core tickers." if center_control > 0.6 else "limited control of core tickers.")
+    )
+
+    # Market performance
+    lines.append(
+        "The portfolio "
+        + ("beats" if beat_market else "does not beat")
+        + " the simulated market benchmark over this turn."
+    )
+
+    # Tactics summary
+    if tactics:
+        lines.append("Key tactical recommendations:")
+        for t in tactics:
+            lines.append(f"  - {t}")
+    else:
+        lines.append("No explicit tactical recommendations were generated for this snapshot.")
+
+    return "\n".join(lines)
+
+
+def explain_simulation_results(sim_df: pd.DataFrame) -> str:
+    """
+    Generate a human-readable summary of a Sun Tzu simulation over multiple turns.
+
+    Expects sim_df with columns:
+      - turn
+      - portfolio_value
+      - beat_market
+      - risk_tension
+      - ai_phase (optional)
+    """
+    if sim_df.empty:
+        return "Simulation returned no data."
+
+    n_turns = len(sim_df)
+    final_value = float(sim_df["portfolio_value"].iloc[-1])
+    initial_value = float(sim_df["portfolio_value"].iloc[0])
+    total_return = (final_value / initial_value - 1.0) if initial_value > 0 else 0.0
+
+    beat_series = sim_df.get("beat_market")
+    n_beat = int(beat_series.astype(bool).sum()) if beat_series is not None else 0
+
+    # Max drawdown (reuse your compute_max_drawdown or local logic)
+    values = sim_df["portfolio_value"].astype(float)
+    running_max = values.cummax()
+    drawdown = values / running_max - 1.0
+    max_dd = float(drawdown.min())
+
+    # Average tension and phase distribution
+    avg_tension = float(sim_df.get("risk_tension", pd.Series([0.0] * n_turns)).mean())
+    phase_counts = sim_df.get("ai_phase", pd.Series(["unknown"] * n_turns)).value_counts()
+    dominant_phase = phase_counts.index[0] if len(phase_counts) > 0 else "unknown"
+
+    lines = []
+    lines.append(
+        f"Simulation over {n_turns} turns: initial value {initial_value:.2f}, final value {final_value:.2f}, "
+        f"total return {total_return * 100:.2f}%."
+    )
+    lines.append(
+        f"The portfolio beat the market benchmark on {n_beat} turns out of {n_turns}."
+    )
+    lines.append(
+        f"Maximum drawdown during the simulation was {max_dd * 100:.2f}%."
+    )
+    lines.append(
+        f"Average strategic tension was {avg_tension:.3f}, with '{dominant_phase}' as the dominant phase."
+    )
+
+    return "\n".join(lines)
+
+
+
 
 def update_state_with_market(
     state: PortfolioState,

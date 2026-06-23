@@ -6,10 +6,4 @@ positions:
     quantity: 30
   AAPL:
     quantity: 40
-  META:
-    quantity: 15
-  GOOG:
-    quantity: 10
-  TSLA:
-    quantity: 12
 benchmark: SPY
