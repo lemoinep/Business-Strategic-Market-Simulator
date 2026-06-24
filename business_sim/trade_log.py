@@ -46,6 +46,7 @@ def append_trades_to_csv(
                 "phase",
                 "tension",
                 "center_control",
+                "reason",
             ])
 
         timestamp = datetime.utcnow().isoformat()
@@ -55,6 +56,7 @@ def append_trades_to_csv(
             side = a["side"]
             quantity = int(a["quantity"])
             price = float(prices_row.get(ticker, 0.0))
+            reason = a.get("reason", "")
 
             writer.writerow([
                 timestamp,
@@ -66,4 +68,5 @@ def append_trades_to_csv(
                 phase,
                 tension,
                 center_control,
+                reason,
             ])

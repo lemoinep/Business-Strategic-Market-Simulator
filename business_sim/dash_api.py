@@ -18,29 +18,38 @@ if PROJECT_ROOT not in sys.path:
 from typing import Dict, Any, List
 from business_sim.core_portfolio import PortfolioState
 
+
 def build_decision_recommendation(
     state: PortfolioState,
     result: Dict[str, Any],
     max_trade_fraction: float = 0.1,
+    max_position_weight: float = 0.25,
+    profit_threshold: float = 0.20,
+    drawdown_threshold: float = -0.15,
 ) -> Dict[str, Any]:
     """
     Build a human-readable decision recommendation based on the current state
     and Sun Tzu AI snapshot result.
 
-    Returns a dict with:
-      - 'text': explanation string ("Je te conseille ...")
+    Adds richer sell logic:
+      - Reduce positions that are too large (max_position_weight).
+      - Take profits above profit_threshold (+20% by default).
+      - Cut losses / reduce exposure below drawdown_threshold (-15% by default).
+
+    Returns:
+      - 'text': explanation string ("I recommend ...")
       - 'actions': list of structured trade actions
-          each action: {'ticker': str, 'side': 'buy'|'sell', 'quantity': int, 'reason': str}
     """
     tactics: List[str] = result.get("tactics", [])
     tension = float(result.get("risk_tension", 0.0))
     center_control = float(result.get("center_control", 0.0))
 
     actions: List[Dict[str, Any]] = []
+    reasons: List[str] = []
 
-    # Map tactics to simple buy/sell decisions
     tickers_in_state = [a.ticker for a in state.assets]
 
+    # 1) Tactiques Sun Tzu: renforcement / ajustement
     for t in tactics:
         t_lower = t.lower()
         if "strengthen" in t_lower:
@@ -55,10 +64,10 @@ def build_decision_recommendation(
             if ticker is None:
                 continue
 
-            # Find asset
             asset = next(a for a in state.assets if a.ticker == ticker)
             max_qty = int(asset.quantity * max_trade_fraction) or 1
 
+            # Base rule from tension: low tension = buy, high tension = sell
             if tension < 0.3:
                 side = "buy"
                 qty = max_qty
@@ -69,24 +78,71 @@ def build_decision_recommendation(
                 # Moderate tension: small adjust depending on center_control
                 side = "buy" if center_control > 0.5 else "hold"
                 qty = max(1, int(max_qty / 2))
-                
-                #side = "sell"
-                #qty = max(1, int(max_qty / 2))
 
             if side != "hold" and qty > 0:
                 actions.append({
                     "ticker": ticker,
                     "side": side,
                     "quantity": qty,
-                    "reason": t,
+                    "reason": f"Tactic: {t}",
                 })
 
-    # Build textual recommendation
+    # 2) Risk management: reduce oversized positions
+    total_value = sum(a.quantity * a.price for a in state.assets) or 1.0
+    for asset in state.assets:
+        position_value = asset.quantity * asset.price
+        weight = position_value / total_value
+        if weight > max_position_weight and asset.quantity > 0:
+            # Reduce the position by a fraction of its size
+            sell_qty = int(asset.quantity * max_trade_fraction) or 1
+            actions.append({
+                "ticker": asset.ticker,
+                "side": "sell",
+                "quantity": sell_qty,
+                "reason": (
+                    f"Risk management: reduce oversized position (weight={weight:.2f} > "
+                    f"{max_position_weight:.2f})."
+                ),
+            })
 
+    # 3) Profit-taking and drawdown logic (if avg_price is available)
+    for asset in state.assets:
+        if getattr(asset, "avg_price", None) is None or asset.avg_price <= 0:
+            continue  # skip if we don't have cost basis
+
+        current_price = asset.price
+        pnl_percent = (current_price - asset.avg_price) / asset.avg_price
+
+        if pnl_percent >= profit_threshold and asset.quantity > 0:
+            # Take partial profits
+            sell_qty = int(asset.quantity * max_trade_fraction) or 1
+            actions.append({
+                "ticker": asset.ticker,
+                "side": "sell",
+                "quantity": sell_qty,
+                "reason": (
+                    f"Profit taking: position up {pnl_percent:.0%} from cost basis "
+                    f"(threshold={profit_threshold:.0%})."
+                ),
+            })
+        elif pnl_percent <= drawdown_threshold and asset.quantity > 0:
+            # Cut losses / reduce exposure
+            sell_qty = int(asset.quantity * max_trade_fraction) or 1
+            actions.append({
+                "ticker": asset.ticker,
+                "side": "sell",
+                "quantity": sell_qty,
+                "reason": (
+                    f"Drawdown control: position down {pnl_percent:.0%} from cost basis "
+                    f"(threshold={drawdown_threshold:.0%})."
+                ),
+            })
+
+    # 4) 
     if not actions:
         text = (
             "I recommend not making any major transactions at the moment.\n"
-            "The current tactics do not suggest a clear adjustment for your portfolio."
+            "The current tactics and risk signals do not suggest a clear adjustment for your portfolio."
         )
     else:
         lines = ["I recommend adjusting your portfolio as follows:"]
@@ -94,11 +150,12 @@ def build_decision_recommendation(
             verb = "buy" if a["side"] == "buy" else "sell"
             lines.append(
                 f"- {verb} {a['quantity']} shares of {a['ticker']} "
-                f"(reason: {a['reason']})"
+                f"({a['reason']})"
             )
         lines.append(
             "These recommendations are based on the current phase, market tension, "
-            "and central market control identified by the Sun Tzu AI snapshot."
+            "central market control and basic risk-management rules (position sizing, "
+            "profit-taking, and drawdown control)."
         )
         text = "\n".join(lines)
 
@@ -106,6 +163,8 @@ def build_decision_recommendation(
         "text": text,
         "actions": actions,
     }
+
+
 
 
 def init_portfolio_state_from_config(config: Dict[str, Any]) -> PortfolioState:
@@ -238,6 +297,48 @@ def explain_simulation_results(sim_df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def update_position_avg_price(
+    positions: Dict[str, Dict[str, float]],
+    ticker: str,
+    side: str,
+    qty: int,
+    trade_price: float,
+) -> None:
+    """
+    Update quantity and avg_price in positions[ticker] using average cost method.
+
+    positions[ticker] is expected to have:
+      - 'quantity': current shares
+      - 'avg_price': current avg cost per share (if absent, assumed 0)
+    """
+    if ticker not in positions or qty <= 0:
+        return
+
+    current_qty = float(positions[ticker].get("quantity", 0.0))
+    current_avg_price = float(positions[ticker].get("avg_price", 0.0))
+
+    if side == "buy":
+        # Average cost update: new_avg = (old_cost + new_cost) / new_shares
+        total_cost_old = current_avg_price * current_qty
+        total_cost_new = total_cost_old + qty * trade_price
+        total_shares_new = current_qty + qty
+
+        if total_shares_new > 0:
+            new_avg_price = total_cost_new / total_shares_new
+        else:
+            new_avg_price = 0.0
+
+        positions[ticker]["quantity"] = total_shares_new
+        positions[ticker]["avg_price"] = new_avg_price
+
+    elif side == "sell":
+        total_shares_new = max(0.0, current_qty - qty)
+
+        positions[ticker]["quantity"] = total_shares_new
+        if total_shares_new <= 0:
+            positions[ticker]["avg_price"] = 0.0
+            
+            
 
 
 def update_state_with_market(

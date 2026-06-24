@@ -27,6 +27,8 @@ from dash.dependencies import Input, Output, State
 
 import plotly.graph_objs as go
 
+import plotly.graph_objects as go
+
 
 import plotly.io as pio
 pio.templates.default = "plotly_dark"  
@@ -48,6 +50,7 @@ from business_sim.dash_api import (
 
 from business_sim.trade_log import append_trades_to_csv
 from business_sim.dash_api import update_state_with_market
+from business_sim.dash_api import update_position_avg_price
 
 def compute_max_drawdown(series: pd.Series) -> float:
     """
@@ -178,6 +181,7 @@ app.layout = html.Div([
 ])
 
 
+
 def layout_history_tab():
     TRADE_HISTORY_FILE = os.path.join("data", "trade_history.csv")
 
@@ -189,22 +193,100 @@ def layout_history_tab():
             df["timestamp"] = pd.to_datetime(df["timestamp"])
             df = df.sort_values("timestamp", ascending=False)
 
-        # Compute summary
+        # Compute basic summary
         total_orders = len(df)
+
+        # Volume by side
         total_buy_volume = int(df.loc[df["side"] == "buy", "quantity"].sum()) if total_orders > 0 else 0
         total_sell_volume = int(df.loc[df["side"] == "sell", "quantity"].sum()) if total_orders > 0 else 0
 
+        # Classify by reason
+
+        if "reason" in df.columns:
+            df["is_profit_taking"] = df["reason"].str.contains("Profit taking", case=False, na=False)
+            df["is_drawdown_control"] = df["reason"].str.contains("Drawdown control", case=False, na=False)
+            df["is_risk_management"] = df["reason"].str.contains("Risk management", case=False, na=False)
+
+            n_profit = int(df["is_profit_taking"].sum())
+            n_drawdown = int(df["is_drawdown_control"].sum())
+            n_risk = int(df["is_risk_management"].sum())
+            n_other = total_orders - n_profit - n_drawdown
+        else:
+            n_profit = 0
+            n_drawdown = 0
+            n_risk = 0
+            n_other = total_orders    
+            
+
+        # Percentages
+        pct_profit = (n_profit / total_orders * 100.0) if total_orders > 0 else 0.0
+        pct_drawdown = (n_drawdown / total_orders * 100.0) if total_orders > 0 else 0.0
+        pct_risk = (n_risk / total_orders * 100.0) if total_orders > 0 else 0.0
+        
         summary_text = (
             f"Total orders: {total_orders} | "
             f"Total buy volume: {total_buy_volume} | "
-            f"Total sell volume: {total_sell_volume}"
+            f"Total sell volume: {total_sell_volume}\n"
+            f"Profit-taking trades: {n_profit} ({pct_profit:.1f}%) | "
+            f"Drawdown-control trades: {n_drawdown} ({pct_drawdown:.1f}%)"
+            f"Risk-management trades: {n_risk} ({pct_risk:.1f}%)"
         )
+
+        # Build bar chart figure
+        trade_types = ["Profit taking", "Drawdown control", "Other"]
+        trade_counts = [n_profit, n_drawdown, n_risk, n_other]
+
+        fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=trade_types,
+                    y=trade_counts,
+                    text=trade_counts,
+                    textposition="auto",
+                    marker=dict(
+                        color=["#2ecc71", "#e74c3c", "#f1c40f", "#95a5a6"],
+                    ),
+                )
+            ],
+            layout=go.Layout(
+                title="Trade types distribution",
+                xaxis=dict(title="Trade type"),
+                yaxis=dict(title="Number of trades"),
+                paper_bgcolor="rgb(30, 30, 30)",
+                plot_bgcolor="rgb(30, 30, 30)",
+                font=dict(color="white"),
+            ),
+        )
+
+
     else:
         df = pd.DataFrame(columns=[
             "timestamp", "mode", "ticker", "side",
-            "quantity", "price", "phase", "tension", "center_control",
+            "quantity", "price", "phase", "tension", "center_control", "reason",
         ])
         summary_text = "No trade history available."
+        trade_types = ["Profit taking", "Drawdown control", "Other"]
+        trade_counts = [0, 0, 0]
+        fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=trade_types,
+                    y=trade_counts,
+                    text=trade_counts,
+                    textposition="auto",
+                    marker=dict(color=["#2ecc71", "#e74c3c", "#95a5a6"]),
+                )
+            ],
+            layout=go.Layout(
+                title="Trade types distribution",
+                xaxis=dict(title="Trade type"),
+                yaxis=dict(title="Number of trades"),
+                paper_bgcolor="rgb(30, 30, 30)",
+                plot_bgcolor="rgb(30, 30, 30)",
+                font=dict(color="white"),
+            ),
+        )
+        
 
     return dbc.Card(
         [
@@ -215,6 +297,11 @@ def layout_history_tab():
                         summary_text,
                         color="info",
                         className="mb-3",
+                    ),
+                    dcc.Graph(
+                        id="trade-types-bar",
+                        figure=fig,
+                        style={"height": "250px"},
                     ),
                     dash_table.DataTable(
                         id="trade-history-table",
@@ -348,6 +435,62 @@ def layout_live_tab():
                                         },
                                     ),
                                     html.Hr(),
+                                    html.H5("Risk management parameters", className="mt-2", style={"color": "#ffffff"}),
+                                    html.Div(
+                                        [
+                                            html.Label("Max position weight (%)", style={"color": "#ffffff"}),
+                                            dcc.Slider(
+                                                id="max-position-weight-slider",
+                                                min=10,
+                                                max=50,
+                                                step=5,
+                                                value=25,
+                                                marks={i: f"{i}%" for i in range(10, 55, 5)},
+                                                tooltip={"placement": "bottom", "always_visible": False},
+                                            ),
+                                        ],
+                                        className="mb-3",
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Label("Profit threshold (%)", style={"color": "#ffffff"}),
+                                            dcc.Slider(
+                                                id="profit-threshold-slider",
+                                                min=5,
+                                                max=50,
+                                                step=5,
+                                                value=20,
+                                                marks={i: f"{i}%" for i in range(5, 55, 5)},
+                                                tooltip={"placement": "bottom", "always_visible": False},
+                                            ),
+                                        ],
+                                        className="mb-3",
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Label("Drawdown threshold (%)", style={"color": "#ffffff"}),
+                                            dcc.Slider(
+                                                id="drawdown-threshold-slider",
+                                                min=-50,
+                                                max=-5,
+                                                step=5,
+                                                value=-15,
+                                                marks={i: f"{i}%" for i in range(-50, -4, 5)},
+                                                tooltip={"placement": "bottom", "always_visible": False},
+                                            ),
+                                        ],
+                                        className="mb-3",
+                                    ),
+                                    
+                                    dbc.Button(
+                                        "Reset to defaults",
+                                        id="reset-risk-params-button",
+                                        color="secondary",
+                                        outline=True,
+                                        className="mt-2 mb-2",
+                                    ),
+                                    
+                                    
                                     dcc.Checklist(
                                         id="decision-auto-mode",
                                         options=[
@@ -374,6 +517,8 @@ def layout_live_tab():
                             ),
                         ],
                         className="mb-3",
+                    
+
                     ),
                     
 
@@ -480,29 +625,6 @@ def layout_sim_tab():
 
 
 
-
-"""
-@app.callback(
-    Output("tabs-content", "children"),
-    Input("tabs", "value"),
-)
-def render_tabs(tab_value):
-    if tab_value == "tab-sim":
-        return layout_sim_tab()
-    # default: live view
-    return layout_live_tab()
-"""
-
-"""
-@app.callback(
-    Output("tabs-content", "children"),
-    Input("tabs", "value"),
-)
-def render_tabs(tab_value):
-    if tab_value == "tab-sim":
-        return layout_sim_tab()
-    return layout_live_tab()
-"""
 
 @app.callback(
     [
@@ -647,6 +769,21 @@ def run_simulation(n_clicks, n_turns, mode, prices_data):
 # ---------- Callbacks ----------
 
 
+@app.callback(
+    [
+        Output("max-position-weight-slider", "value"),
+        Output("profit-threshold-slider", "value"),
+        Output("drawdown-threshold-slider", "value"),
+    ],
+    Input("reset-risk-params-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def reset_risk_params(n_clicks):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    return 25, 20, -15
+
+
 @app.callback(Output("tabs-content", "children"), Input("tabs", "value"))
 def render_content(tab):
     if tab == "tab-live":
@@ -774,9 +911,15 @@ def execute_decision(execute_clicks, auto_mode, recommendation, prices_data):
     ],
     Input("decision-generate-button", "n_clicks"),
     State("prices-store", "data"),
+    State("max-position-weight-slider", "value"),
+    State("profit-threshold-slider", "value"),
+    State("drawdown-threshold-slider", "value"),
     prevent_initial_call=True,
 )
-def generate_decision(n_clicks, prices_data):
+def generate_decision(n_clicks, prices_data,
+                      max_position_weight_pct,
+                      profit_threshold_pct,
+                      drawdown_threshold_pct):
     if not n_clicks:
         return "", None
 
@@ -790,7 +933,6 @@ def generate_decision(n_clicks, prices_data):
 
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date")
-    latest_row = df.iloc[-1]
 
     cash = float(PORTFOLIO_CONFIG.get("cash", 0.0))
     try:
@@ -798,7 +940,19 @@ def generate_decision(n_clicks, prices_data):
     except Exception as e:
         return f"Error while generating decision: {e}", None
 
-    recommendation = build_decision_recommendation(state, result)
+    # Convert slider percentages to decimals
+    max_position_weight = float(max_position_weight_pct) / 100.0
+    profit_threshold = float(profit_threshold_pct) / 100.0
+    drawdown_threshold = float(drawdown_threshold_pct) / 100.0
+
+    recommendation = build_decision_recommendation(
+        state,
+        result,
+        max_trade_fraction=0.1,
+        max_position_weight=max_position_weight,
+        profit_threshold=profit_threshold,
+        drawdown_threshold=drawdown_threshold,
+    )
 
     return recommendation["text"], recommendation
 
