@@ -13,7 +13,100 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, os.pardir))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+   
     
+from typing import Dict, Any, List
+from business_sim.core_portfolio import PortfolioState
+
+def build_decision_recommendation(
+    state: PortfolioState,
+    result: Dict[str, Any],
+    max_trade_fraction: float = 0.1,
+) -> Dict[str, Any]:
+    """
+    Build a human-readable decision recommendation based on the current state
+    and Sun Tzu AI snapshot result.
+
+    Returns a dict with:
+      - 'text': explanation string ("Je te conseille ...")
+      - 'actions': list of structured trade actions
+          each action: {'ticker': str, 'side': 'buy'|'sell', 'quantity': int, 'reason': str}
+    """
+    tactics: List[str] = result.get("tactics", [])
+    tension = float(result.get("risk_tension", 0.0))
+    center_control = float(result.get("center_control", 0.0))
+
+    actions: List[Dict[str, Any]] = []
+
+    # Map tactics to simple buy/sell decisions
+    tickers_in_state = [a.ticker for a in state.assets]
+
+    for t in tactics:
+        t_lower = t.lower()
+        if "strengthen" in t_lower:
+            # Try to extract ticker from the text
+            parts = t.split()
+            ticker = None
+            for p in parts:
+                p_clean = "".join(c for c in p if c.isalpha()).upper()
+                if p_clean in tickers_in_state:
+                    ticker = p_clean
+                    break
+            if ticker is None:
+                continue
+
+            # Find asset
+            asset = next(a for a in state.assets if a.ticker == ticker)
+            max_qty = int(asset.quantity * max_trade_fraction) or 1
+
+            if tension < 0.3:
+                side = "buy"
+                qty = max_qty
+            elif tension > 0.7:
+                side = "sell"
+                qty = max_qty
+            else:
+                # Moderate tension: small adjust depending on center_control
+                side = "buy" if center_control > 0.5 else "hold"
+                qty = max(1, int(max_qty / 2))
+                
+                #side = "sell"
+                #qty = max(1, int(max_qty / 2))
+
+            if side != "hold" and qty > 0:
+                actions.append({
+                    "ticker": ticker,
+                    "side": side,
+                    "quantity": qty,
+                    "reason": t,
+                })
+
+    # Build textual recommendation
+
+    if not actions:
+        text = (
+            "I recommend not making any major transactions at the moment.\n"
+            "The current tactics do not suggest a clear adjustment for your portfolio."
+        )
+    else:
+        lines = ["I recommend adjusting your portfolio as follows:"]
+        for a in actions:
+            verb = "buy" if a["side"] == "buy" else "sell"
+            lines.append(
+                f"- {verb} {a['quantity']} shares of {a['ticker']} "
+                f"(reason: {a['reason']})"
+            )
+        lines.append(
+            "These recommendations are based on the current phase, market tension, "
+            "and central market control identified by the Sun Tzu AI snapshot."
+        )
+        text = "\n".join(lines)
+
+    return {
+        "text": text,
+        "actions": actions,
+    }
+
 
 def init_portfolio_state_from_config(config: Dict[str, Any]) -> PortfolioState:
     """

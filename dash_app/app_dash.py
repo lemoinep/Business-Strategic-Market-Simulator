@@ -19,7 +19,12 @@ import yfinance as yf
 import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
+from dash import dash_table 
+
 from dash.dependencies import Input, Output, State
+
+
+
 import plotly.graph_objs as go
 
 
@@ -38,9 +43,10 @@ from business_sim.dash_api import (
     run_rl_simulation,
     explain_snapshot_result,
     explain_simulation_results,
+    build_decision_recommendation, 
 )
 
-
+from business_sim.trade_log import append_trades_to_csv
 from business_sim.dash_api import update_state_with_market
 
 def compute_max_drawdown(series: pd.Series) -> float:
@@ -138,39 +144,25 @@ app = dash.Dash(
 app.title = "Sun Tzu Strategic Portfolio Dashboard"
 
 
-"""
-app.layout = dbc.Container(
-    [
-        dbc.NavbarSimple(
-            brand="Sun Tzu Strategic Portfolio Dashboard",
-            color="primary",
-            dark=True,
-            className="mb-3",
-        ),
-
-        dcc.Store(id="prices-store", data=prices_df.to_dict("records")),
-
-        dbc.Tabs(
-            id="tabs",
-            active_tab="tab-live",
-            className="mb-3",
-            children=[
-                dbc.Tab(label="Live & AI Snapshot", tab_id="tab-live"),
-                dbc.Tab(label="AI Simulation (N turns)", tab_id="tab-sim"),
-            ],
-        ),
-
-        html.Div(id="tabs-content"),
-    ],
-    fluid=True,
-)
-"""
-
 
 app.layout = html.Div([
-    html.H1("Sun Tzu: Strategic Portfolio Dashboard"),
+    html.H1(
+        "Sun Tzu: Strategic Portfolio Dashboard by Dr.Patrick Lemoine",
+        style={
+                "fontSize": "28px",
+                "fontWeight": "bold",
+                "color": "#ffffff",
+                "textAlign": "center",
+                "marginBottom": "10px",
+            },),
 
     dcc.Store(id="prices-store", data=prices_df.reset_index().to_dict("records")),
+    dcc.Store(id="decision-store", data=None),
+
+    dcc.ConfirmDialog(
+        id="decision-confirm-dialog",
+        message="Are you sure you want to execute this decision?",
+    ),
 
     dcc.Tabs(
         id="tabs",
@@ -178,55 +170,104 @@ app.layout = html.Div([
         children=[
             dcc.Tab(label="Live & AI Snapshot", value="tab-live"),
             dcc.Tab(label="AI Simulation (N turns)", value="tab-sim"),
+            dcc.Tab(label="Trade History", value="tab-history"),
         ],
     ),
 
     html.Div(id="tabs-content"),
 ])
 
-"""
-def layout_live_tab():
-    return html.Div([
-        html.Div([
-            html.Div([
-                html.Label("Ticker"),
-                dcc.Dropdown(
-                    id="ticker-dropdown",
-                    options=[{"label": t, "value": t} for t in TICKERS],
-                    value=TICKERS[0] if TICKERS else None,
-                    clearable=False,
-                ),
-                dcc.Graph(id="price-chart"),
-                dcc.Graph(id="portfolio-chart"),
-            ], style={"width": "65%", "display": "inline-block"}),
 
-            html.Div([
-                html.H3("Sun Tzu / Chess AI"),
+def layout_history_tab():
+    TRADE_HISTORY_FILE = os.path.join("data", "trade_history.csv")
 
-                html.Button("Analyze (1 turn)", id="ai-run-button", n_clicks=0),
-                html.Div(id="ai-last-run"),
+    if os.path.exists(TRADE_HISTORY_FILE):
+        df = pd.read_csv(TRADE_HISTORY_FILE)
 
-                html.Br(),
-                html.Div(id="ai-phase"),
-                html.Div(id="ai-tension"),
-                html.Div(id="ai-center-control"),
-                html.Div(id="ai-personality"),
-                html.Div(id="ai-posture"),
+        # Ensure timestamp is datetime and sort descending
+        if "timestamp" in df.columns and not df.empty:
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df = df.sort_values("timestamp", ascending=False)
 
-                html.H4("Tactics"),
-                html.Ul(id="ai-tactics"),
-                
-                html.H4("AI Explanation"),
-                html.Pre(id="ai-explanation", style={"whiteSpace": "pre-wrap"}),
-            ], style={
-                "width": "30%",
-                "display": "inline-block",
-                "verticalAlign": "top",
-                "marginLeft": "3%",
-            }),
-        ]),
-    ])
-"""
+        # Compute summary
+        total_orders = len(df)
+        total_buy_volume = int(df.loc[df["side"] == "buy", "quantity"].sum()) if total_orders > 0 else 0
+        total_sell_volume = int(df.loc[df["side"] == "sell", "quantity"].sum()) if total_orders > 0 else 0
+
+        summary_text = (
+            f"Total orders: {total_orders} | "
+            f"Total buy volume: {total_buy_volume} | "
+            f"Total sell volume: {total_sell_volume}"
+        )
+    else:
+        df = pd.DataFrame(columns=[
+            "timestamp", "mode", "ticker", "side",
+            "quantity", "price", "phase", "tension", "center_control",
+        ])
+        summary_text = "No trade history available."
+
+    return dbc.Card(
+        [
+            dbc.CardHeader("Trade History"),
+            dbc.CardBody(
+                [
+                    dbc.Alert(
+                        summary_text,
+                        color="info",
+                        className="mb-3",
+                    ),
+                    dash_table.DataTable(
+                        id="trade-history-table",
+                        columns=[{"name": c, "id": c} for c in df.columns],
+                        data=df.to_dict("records"),
+                        page_size=15,
+                        sort_action="none",  # les données sont déjà triées
+                        style_table={
+                            "overflowX": "auto",
+                            "backgroundColor": "rgb(30, 30, 30)",
+                        },
+                        style_header={
+                            "backgroundColor": "rgb(50, 50, 50)",
+                            "color": "white",
+                            "fontWeight": "bold",
+                        },
+                        style_cell={
+                            "backgroundColor": "rgb(30, 30, 30)",
+                            "color": "white",
+                            "border": "1px solid rgb(60, 60, 60)",
+                            "fontFamily": "Arial, sans-serif",
+                            "fontSize": "12px",
+                            "textAlign": "left",
+                            "padding": "5px",
+                        },
+                        style_data_conditional=[
+                            {
+                                "if": {"row_index": "odd"},
+                                "backgroundColor": "rgb(40, 40, 40)",
+                            },
+                            {
+                                "if": {"column_id": "quantity"},
+                                "textAlign": "right",
+                            },
+                            {
+                                "if": {"column_id": "price"},
+                                "textAlign": "right",
+                            },
+                            {
+                                "if": {"column_id": "tension"},
+                                "textAlign": "right",
+                            },
+                            {
+                                "if": {"column_id": "center_control"},
+                                "textAlign": "right",
+                            },
+                        ],
+                    ),
+                ]
+            ),
+        ],
+        className="mb-3",
+    )
 
 def layout_live_tab():
     return dbc.Row(
@@ -254,84 +295,96 @@ def layout_live_tab():
                 width=8,
             ),
             dbc.Col(
-                dbc.Card(
-                    [
-                        dbc.CardHeader("Sun Tzu / Chess AI"),
-                        dbc.CardBody(
-                            [
-                                dbc.Button(
-                                    "Analyze (1 turn)",
-                                    id="ai-run-button",
-                                    color="success",
-                                    className="mb-2",
-                                ),
-                                html.Div(id="ai-last-run", className="mb-2"),
+                [
+                    dbc.Card(
+                        [
+                            dbc.CardHeader("Sun Tzu / Chess AI"),
+                            dbc.CardBody(
+                                [
+                                    dbc.Button(
+                                        "Analyze (1 turn)",
+                                        id="ai-run-button",
+                                        color="success",
+                                        className="mb-2",
+                                    ),
+                                    html.Div(id="ai-last-run", className="mb-2"),
 
-                                html.Div(id="ai-phase"),
-                                html.Div(id="ai-tension"),
-                                html.Div(id="ai-center-control"),
-                                html.Div(id="ai-personality"),
-                                html.Div(id="ai-posture"),
+                                    html.Div(id="ai-phase"),
+                                    html.Div(id="ai-tension"),
+                                    html.Div(id="ai-center-control"),
+                                    html.Div(id="ai-personality"),
+                                    html.Div(id="ai-posture"),
 
-                                html.H5("Tactics", className="mt-3"),
-                                html.Ul(id="ai-tactics"),
+                                    html.H5("Tactics", className="mt-3"),
+                                    html.Ul(id="ai-tactics"),
 
-                                html.H5("AI Explanation", className="mt-3"),
-                                html.Pre(
-                                    id="ai-explanation",
-                                    style={"whiteSpace": "pre-wrap"},
-                                ),
-                            ]
-                        ),
-                    ],
-                    className="mb-3",
-                ),
+                                    html.H5("AI Explanation", className="mt-3"),
+                                    html.Pre(
+                                        id="ai-explanation",
+                                        style={"whiteSpace": "pre-wrap"},
+                                    ),
+                                ]
+                            ),
+                        ],
+                        className="mb-3",
+                    ),
+                    
+                    dbc.Card(
+                        [
+                            dbc.CardHeader("Decision Assistant"),
+                            dbc.CardBody(
+                                [
+                                    dbc.Button(
+                                        "Generate decision",
+                                        id="decision-generate-button",
+                                        color="warning",
+                                        className="mb-2",
+                                    ),
+                                    html.Div(
+                                        id="decision-text",
+                                        style={
+                                            "whiteSpace": "pre-wrap",
+                                            "color": "#ffffff",
+                                        },
+                                    ),
+                                    html.Hr(),
+                                    dcc.Checklist(
+                                        id="decision-auto-mode",
+                                        options=[
+                                            {
+                                                "label": "Auto mode (execute without confirmation)",
+                                                "value": "auto",
+                                            }
+                                        ],
+                                        value=[],
+                                        style={"color": "#ffffff"},
+                                    ),
+                                    dbc.Button(
+                                        "Execute decision",
+                                        id="decision-execute-button",
+                                        color="danger",
+                                        className="mt-2",
+                                    ),
+                                    html.Div(
+                                        id="decision-status",
+                                        className="mt-2",
+                                        style={"color": "#ffffff"},
+                                    ),
+                                ]
+                            ),
+                        ],
+                        className="mb-3",
+                    ),
+                    
+
+                ],
                 width=4,
             ),
         ]
     )
 
-"""
-def layout_sim_tab():
-    return html.Div([
-        html.H3("AI Simulation (N turns)"),
 
-        html.Div([
-            html.Label("Number of turns"),
-            dcc.Slider(
-                id="sim-horizon-slider",
-                min=5,
-                max=60,
-                step=5,
-                value=20,
-                marks={i: str(i) for i in range(5, 65, 10)},
-            ),
 
-            html.Br(),
-            html.Label("Simulation mode"),
-            dcc.RadioItems(
-                id="sim-mode-radio",
-                options=[
-                    {"label": "Sun Tzu / Chess AI", "value": "suntzu"},
-                    {"label": "RL (PPO)", "value": "rl"},
-                ],
-                value="suntzu",
-                labelStyle={"display": "inline-block", "marginRight": "10px"},
-            ),
-
-            html.Br(),
-            html.Button("Run Simulation", id="sim-run-button", n_clicks=0),
-            html.Div(id="sim-last-run"),
-            
-            html.H4("Simulation summary"),
-            html.Pre(id="sim-explanation", style={"whiteSpace": "pre-wrap"}),
-
-        ], style={"marginBottom": "20px"}),
-
-        dcc.Graph(id="sim-portfolio-chart"),
-        dcc.Graph(id="sim-tension-chart"),
-    ])
-"""
 
 def layout_sim_tab():
     return dbc.Row(
@@ -425,6 +478,9 @@ def layout_sim_tab():
     )
 
 
+
+
+
 """
 @app.callback(
     Output("tabs-content", "children"),
@@ -437,6 +493,7 @@ def render_tabs(tab_value):
     return layout_live_tab()
 """
 
+"""
 @app.callback(
     Output("tabs-content", "children"),
     Input("tabs", "value"),
@@ -445,7 +502,7 @@ def render_tabs(tab_value):
     if tab_value == "tab-sim":
         return layout_sim_tab()
     return layout_live_tab()
-
+"""
 
 @app.callback(
     [
@@ -588,6 +645,163 @@ def run_simulation(n_clicks, n_turns, mode, prices_data):
 
 
 # ---------- Callbacks ----------
+
+
+@app.callback(Output("tabs-content", "children"), Input("tabs", "value"))
+def render_content(tab):
+    if tab == "tab-live":
+        return layout_live_tab()
+    elif tab == "tab-sim":
+        return layout_sim_tab()
+    elif tab == "tab-history":
+        return layout_history_tab()
+    else:
+        return "Unknown tab"
+    
+
+
+@app.callback(
+    Output("decision-confirm-dialog", "displayed"),
+    Input("decision-execute-button", "n_clicks"),
+    State("decision-auto-mode", "value"),
+    prevent_initial_call=True,
+)
+def confirm_or_auto(n_clicks, auto_mode):
+    """
+    If auto mode is ON, no confirmation dialog is shown.
+    If auto mode is OFF, show the confirmation dialog.
+    """
+    if not n_clicks:
+        return False
+
+    if "auto" in auto_mode:
+        # Auto mode: execute directly, no dialog
+        return False
+
+    # Manual mode: show confirmation dialog
+    return True
+
+
+@app.callback(
+    Output("decision-status", "children"),
+    Input("decision-execute-button", "n_clicks"),
+    State("decision-auto-mode", "value"),
+    State("decision-store", "data"),
+    State("prices-store", "data"),
+    prevent_initial_call=True,
+)
+def execute_decision(execute_clicks, auto_mode, recommendation, prices_data):
+    if recommendation is None:
+        return "No decision to execute."
+
+    actions = recommendation.get("actions", [])
+    if not actions:
+        return "Decision contains no actionable trades."
+
+    mode = "auto" if "auto" in auto_mode else "manual"
+
+    # Simulated execution: adjust quantities
+    for a in actions:
+        ticker = a["ticker"]
+        side = a["side"]
+        qty = int(a["quantity"])
+
+        if ticker not in POSITIONS:
+            continue
+
+        current_qty = float(POSITIONS[ticker].get("quantity", 0.0))
+        if side == "buy":
+            new_qty = current_qty + qty
+        elif side == "sell":
+            new_qty = max(0.0, current_qty - qty)
+        else:
+            new_qty = current_qty
+
+        POSITIONS[ticker]["quantity"] = new_qty
+
+    # Rebuild price DataFrame to get last prices and snapshot context
+    prices_row = {}
+    result = {}
+    if prices_data:
+        df = pd.DataFrame(prices_data)
+        if "date" in df.columns and len(df) > 0:
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
+            latest_row = df.iloc[-1]
+            prices_row = latest_row.to_dict()
+
+            cash = float(PORTFOLIO_CONFIG.get("cash", 0.0))
+            try:
+                state, result = get_ai_snapshot(df, POSITIONS, cash)
+            except Exception:
+                result = {}
+        else:
+            prices_row = {}
+            result = {}
+    else:
+        prices_row = {}
+        result = {}
+
+    # Log trades to CSV
+    try:
+        append_trades_to_csv(
+            actions=actions,
+            prices_row=prices_row,
+            result=result,
+            mode=mode,
+        )
+        log_msg = "Decision executed in simulation and logged to CSV."
+    except Exception as e:
+        log_msg = f"Decision executed in simulation, but logging to CSV failed: {e}"
+
+    lines = [log_msg, "Executed actions:"]
+    for a in actions:
+        ticker = a["ticker"]
+        side = a["side"]
+        qty = int(a["quantity"])
+        lines.append(f"- {side} {qty} shares of {ticker}")
+    status_text = "\n".join(lines)
+
+    return status_text
+
+
+
+
+@app.callback(
+    [
+        Output("decision-text", "children"),
+        Output("decision-store", "data"),
+    ],
+    Input("decision-generate-button", "n_clicks"),
+    State("prices-store", "data"),
+    prevent_initial_call=True,
+)
+def generate_decision(n_clicks, prices_data):
+    if not n_clicks:
+        return "", None
+
+    if not prices_data:
+        return "Error: no price data available for decision.", None
+
+    # Rebuild prices DataFrame
+    df = pd.DataFrame(prices_data)
+    if "date" not in df.columns or len(df) == 0:
+        return "Error: invalid or empty price data.", None
+
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date")
+    latest_row = df.iloc[-1]
+
+    cash = float(PORTFOLIO_CONFIG.get("cash", 0.0))
+    try:
+        state, result = get_ai_snapshot(df, POSITIONS, cash)
+    except Exception as e:
+        return f"Error while generating decision: {e}", None
+
+    recommendation = build_decision_recommendation(state, result)
+
+    return recommendation["text"], recommendation
+
 
 @app.callback(
     Output("price-chart", "figure"),
