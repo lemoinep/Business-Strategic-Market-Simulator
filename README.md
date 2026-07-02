@@ -3,6 +3,10 @@
 [![Version](https://img.shields.io/badge/version-1.1-green.svg)](https://github.com/lemoinep/Business-Strategic-Market-Simulator)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Simulation](https://img.shields.io/badge/Simulation-market-blue.svg)]()
+[![Agents](https://img.shields.io/badge/Multi--Agent-system-purple.svg)]()
+[![Optimization](https://img.shields.io/badge/Optimization-strategic-orange.svg)]()
+[![AI](https://img.shields.io/badge/AI-decision--making-informational.svg)]()
 
 ---
 
