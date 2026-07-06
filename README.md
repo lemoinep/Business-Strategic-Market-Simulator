@@ -207,6 +207,15 @@ The multi‑agent simulator models a **small market of heterogeneous investors**
   - Displays socio‑economic evolution and all AI/agent logs directly in the Tkinter interface. 
   - Exports the full multi‑agent history to JSON.
 
+
+---
+## Business Strategic Market Simulator – System Architecture
+
+<p align="center">
+<img src="Images/P0004.jpg" width="100%" />
+</p>
+---
+
 ***
 
 ## Sun Tzu Strategic Portfolio Dashboard (Dash App)
