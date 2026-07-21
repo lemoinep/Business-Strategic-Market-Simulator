@@ -1,9 +1,12 @@
 import csv
-from typing import List
+import json
+import os
+from typing import List, Optional
 
+import numpy as np
 from tqdm import tqdm
-
 from stable_baselines3 import PPO
+
 from business_sim.core_portfolio import PortfolioEnv
 
 
@@ -16,15 +19,23 @@ def run_batch_ppo(
     model_path: str = "ppo_portfolio",
     num_episodes: int = 100,
     max_turns: int = 30,
-    tickers=None,
+    tickers: Optional[List[str]] = None,
     cash: float = 10000,
     out_csv: str = "rl_batch_data_ppo.csv",
+    seed: int = 42,
+    run_name: str = "ppo_batch",
 ):
+
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+
     model = PPO.load(model_path)
 
     rows = []
 
-    for ep in tqdm(range(num_episodes), desc="Generating PPO episodes"):
+    for ep in tqdm(range(num_episodes), desc=f"Generating PPO episodes ({run_name})"):
+        # Optionnel: seed par épisode pour env
         env = PortfolioEnv(max_turns=max_turns, tickers=tickers, cash=cash)
         state = env.reset()
         done = False
@@ -36,6 +47,9 @@ def run_batch_ppo(
             step_idx += 1
 
             row = {
+                "run_name": run_name,
+                "model_path": model_path,
+                "seed": seed,
                 "episode": ep,
                 "step": step_idx,
                 "reward": reward,
@@ -63,11 +77,25 @@ def run_batch_ppo(
             state = next_state
 
     if rows:
+        os.makedirs(os.path.dirname(out_csv) or ".", exist_ok=True)
         fieldnames = list(rows[0].keys())
         with open(out_csv, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
+
+        config_path = os.path.splitext(out_csv)[0] + "_config.json"
+        config = {
+            "run_name": run_name,
+            "model_path": model_path,
+            "num_episodes": num_episodes,
+            "max_turns": max_turns,
+            "tickers": tickers,
+            "cash": cash,
+            "seed": seed,
+        }
+        with open(config_path, "w", encoding="utf-8") as cf:
+            json.dump(config, cf, indent=2)
 
     return rows
 
@@ -79,5 +107,7 @@ if __name__ == "__main__":
         max_turns=30,
         tickers=["NVDA", "AMD", "MSFT", "SPY"],
         cash=20000,
-        out_csv="rl_batch_data_ppo.csv",
+        out_csv="output/rl_batch_data_ppo.csv",
+        seed=42,
+        run_name="ppo_batch_nvda_amd_msft_spy",
     )

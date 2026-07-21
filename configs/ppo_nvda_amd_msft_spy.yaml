@@ -1,0 +1,15 @@
+run_name: "ppo_batch_nvda_amd_msft_spy"
+model_path: "ppo_portfolio"
+seed: 42
+
+env:
+  max_turns: 30
+  tickers: ["NVDA", "AMD", "MSFT", "SPY"]
+  cash: 20000
+
+rl:
+  algo: "PPO"
+  num_episodes: 100
+
+output:
+  csv: "output/rl_batch_nvda_amd_msft_spy.csv"
