@@ -1,0 +1,15 @@
+run_name: "ppo_semis_focus"
+model_path: "models/ppo_semis_focus"
+seed: 102
+
+env:
+  max_turns: 40
+  tickers: ["NVDA", "AMD", "TSLA", "MSFT", "SPY"]
+  cash: 25000
+
+rl:
+  algo: "PPO"
+  num_episodes: 150
+
+output:
+  csv: "output/rl_batch_semis_focus.csv"

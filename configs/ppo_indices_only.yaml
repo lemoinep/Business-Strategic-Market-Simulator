@@ -1,0 +1,15 @@
+run_name: "ppo_indices_only"
+model_path: "models/ppo_indices_only"
+seed: 103
+
+env:
+  max_turns: 30
+  tickers: ["SPY", "QQQ"]
+  cash: 20000
+
+rl:
+  algo: "PPO"
+  num_episodes: 100
+
+output:
+  csv: "output/rl_batch_indices_only.csv"

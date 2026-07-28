@@ -1,0 +1,15 @@
+run_name: "ppo_megacap_tech"
+model_path: "models/ppo_megacap_tech"
+seed: 101
+
+env:
+  max_turns: 40
+  tickers: ["AAPL", "MSFT", "GOOG", "META", "SPY"]
+  cash: 25000
+
+rl:
+  algo: "PPO"
+  num_episodes: 150
+
+output:
+  csv: "output/rl_batch_megacap_tech.csv"
